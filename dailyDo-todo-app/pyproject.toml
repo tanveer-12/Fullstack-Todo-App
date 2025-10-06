@@ -1,0 +1,20 @@
+[project]
+name = "dailydo-todo-app"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Tanveer Kaur",email = "tanveerkaur1292@outlook.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi (>=0.118.0,<0.119.0)",
+    "uvicorn (>=0.37.0,<0.38.0)"
+]
+
+[tool.poetry]
+packages = [{include = "dailydo_todo_app", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
