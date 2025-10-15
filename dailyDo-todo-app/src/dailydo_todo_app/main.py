@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Depends
-from sqlmodel import SQLModel, Field, create_engine, Session
+from fastapi import FastAPI, Depends, HTTPException
+from sqlmodel import SQLModel, Field, create_engine, Session, select
 from dailydo_todo_app import settings
 from typing import Annotated
+from contextlib import asynccontextmanager
 
 
 # create model
@@ -16,34 +17,25 @@ connection_string: str = str(settings.DATABASE_URL).replace("postgresql","postgr
 engine = create_engine(connection_string, connect_args={"sslmode":"require"}, pool_recycle=300, echo=True)   # sslmode for the encryption over the internet
 
 # creation of table using the engine
-SQLModel.metadata.create_all(engine)
+def create_tables():
+    SQLModel.metadata.create_all(engine)
 
-
-# todo1: Todo = Todo(content="first task")
-# todo2: Todo = Todo(content="second task")
-
-# # session (sessions can be multiple, unlike engine which can be a single obj only for the entire application)
-# # separate session for each functionality / transaction
-# session = Session(engine)
-
-# # create todos in database
-# session.add(todo1)
-# session.add(todo2)
-# print(f'before commit {todo1}')
-# session.commit()
-# print(f'after commit {todo1}')
-# session.close()
 
 def get_session():
     with Session(engine) as session:
         yield session
 
 
-
+@asynccontextmanager
+async def lifespan(app:FastAPI):
+    print('Creating Tables')
+    create_tables()
+    print('Tables created')
+    yield
 
 
 # creating an instance of fastapi class named 'app'
-app:   FastAPI = FastAPI()
+app:   FastAPI = FastAPI(lifespan=lifespan, title="dailyDo Todo App", version='1.0.0')
 
 # root path
 # decorator 
@@ -60,21 +52,38 @@ async def create_todo(todo: Todo, session:Annotated[Session, Depends(get_session
     return todo
 
 
-@app.get('/todos/')
-async def get_all():
-    ...
+@app.get('/todos/', response_model=list[Todo])
+async def get_all(session:Annotated[Session, Depends(get_session)]):
+    todos = session.exec(select(Todo)).all()
+    return todos
 
 
-@app.get('/todos/{id}')
-async def get_single_tod():
-    ...
+@app.get('/todos/{id}', response_model=Todo)
+async def get_single_tod(id:int, session:Annotated[Session, Depends(get_session)]):
+    todo = session.exec(select(Todo).where(Todo.id==id)).first()
+    return todo
 
 
 @app.put('/todos/{id}')
-async def edit_todo():
-    ...
+async def edit_todo(id:int, todo:Todo, session:Annotated[Session, Depends(get_session)]):
+    existing_todo = session.exec(select(Todo).where(Todo.id==id)).first()
+    if existing_todo:
+        existing_todo.content = todo.content
+        existing_todo.is_completed = todo.is_completed
+        session.add(existing_todo)
+        session.commit()
+        session.refresh(existing_todo)
+        return existing_todo
+    else:
+        raise HTTPException(status_code=404, detail="No task found")
 
 
 @app.delete('/todos/{id}')
-async def delete_todo():
-    ...
+async def delete_todo(id:int, session:Annotated[Session, Depends(get_session)]):
+    todo = session.exec(select(Todo).where(Todo.id == id)).first()
+    if todo:
+        session.delete(todo)
+        session.commit()
+        return {"message": "Task successfully deleted"}
+    else:
+        raise HTTPException(status_code=404, detail="No task found")
