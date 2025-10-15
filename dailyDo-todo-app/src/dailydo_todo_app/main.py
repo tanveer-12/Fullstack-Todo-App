@@ -55,13 +55,19 @@ async def create_todo(todo: Todo, session:Annotated[Session, Depends(get_session
 @app.get('/todos/', response_model=list[Todo])
 async def get_all(session:Annotated[Session, Depends(get_session)]):
     todos = session.exec(select(Todo)).all()
-    return todos
+    if todos:
+        return todos
+    else:
+        raise HTTPException(status_code=404, detail="No Tasks found")
 
 
 @app.get('/todos/{id}', response_model=Todo)
 async def get_single_tod(id:int, session:Annotated[Session, Depends(get_session)]):
     todo = session.exec(select(Todo).where(Todo.id==id)).first()
-    return todo
+    if todo:
+        return todo
+    else:
+        raise HTTPException(status_code=404, detail="No Task Found")
 
 
 @app.put('/todos/{id}')
